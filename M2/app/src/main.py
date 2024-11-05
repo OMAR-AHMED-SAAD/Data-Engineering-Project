@@ -1,11 +1,11 @@
 #  outliers,transform_grade, handle_missing, hande int _rate_outliers
 
 import pandas as pd
-from Src.init_cleaning import init_cleaning
-from Src.handling_outliers import handling_outliers, handling_int_rate_outliers
-from Src.handling_missing import handle_missing
-from Src.handling_inconsistency import handle_inconsistencies
-from Src.transformation import transform, transform_grade
+from src.init_cleaning import init_cleaning
+from src.handling_outliers import handling_outliers, handling_int_rate_outliers
+from src.handling_missing import handle_missing
+from src.handling_inconsistency import handle_inconsistencies
+from src.transformation import transform, transform_grade
 
 """
 The main module for the transformation pipeline which includes the following functions:
@@ -15,9 +15,9 @@ The main module for the transformation pipeline which includes the following fun
 """
 
 
-DATASET_PATH = "./Data/fintech_data_17_52_4509.csv"
-STATES_DICT_PATH = "./Data/usa_state_name_code_map.json"
-EMP_LENGTH_MODEL_PATH = "./Models/emp_length_model.pkl"
+DATASET_PATH = "./data/fintech_data_17_52_4509.csv"
+STATES_DICT_PATH = "./data/usa_state_name_code_map.json"
+EMP_LENGTH_MODEL_PATH = "./models/emp_length_model.pkl"
 
 
 def drop_extra_columns(df: pd.DataFrame) -> pd.DataFrame:
