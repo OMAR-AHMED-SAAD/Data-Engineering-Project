@@ -1,6 +1,10 @@
 import pandas as pd
 from sklearn import linear_model
 import pickle as pkl
+import json
+import os
+
+MEANS_DICT_PATH = 'data/means_dict.json'
 
 """
 A module for handling missing values in a DataFrame which includes the following functions:
@@ -36,7 +40,16 @@ def handle_int_rate(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         A pandas DataFrame
     """
-    df['int_rate'] = df.groupby(['state','grade'])['int_rate'].transform(lambda x: x.fillna(x.mean()))
+
+    if os.path.exists(MEANS_DICT_PATH):
+        with open(MEANS_DICT_PATH, 'r') as f:
+            int_rate_data = json.load(f)['int_rate']
+        df['int_rate'] = df.apply(lambda x: int_rate_data[x['state']][x['grade']] if pd.isnull(x['int_rate']) else x['int_rate'], axis=1)
+    else:
+        means_dict = df.groupby(['state', 'grade'])['int_rate'].mean().unstack(fill_value=0).to_dict(orient='index')
+        df['int_rate'] = df.groupby(['state','grade'])['int_rate'].transform(lambda x: x.fillna(x.mean()))
+        with open(MEANS_DICT_PATH, 'w') as f:
+            json.dump({'int_rate':means_dict}, f, indent=4)
     return df
 
 def handle_description(df: pd.DataFrame, lookup_df: pd.DataFrame) -> pd.DataFrame:
@@ -92,11 +105,13 @@ def handle_emp_title(df: pd.DataFrame, lookup_df: pd.DataFrame) -> pd.DataFrame:
     lookup_df = pd.concat([lookup_df, new_row], ignore_index=True)
     return df, lookup_df
 
-def handle_missing(df: pd.DataFrame, lookup_df: pd.DataFrame, model_path: str = 'emp_length_model.pkl') -> pd.DataFrame:
+def handle_missing(df: pd.DataFrame, lookup_df: pd.DataFrame, model_path: str = 'emp_length_model.pkl', update_lookup: bool = False) -> pd.DataFrame:
     """A function to handle missing values in a DataFrame
     Args:
         df: A pandas DataFrame
         lookup_df: A pandas DataFrame
+        model_path: A string representing the path to the model
+        update_lookup: A boolean to update the lookup table
     Returns:
         A pandas DataFrame
     """
@@ -105,4 +120,8 @@ def handle_missing(df: pd.DataFrame, lookup_df: pd.DataFrame, model_path: str = 
     df, lookup_df = handle_description(df, lookup_df)
     df = handle_emp_length(df, model_path)
     df , lookup_df= handle_emp_title(df, lookup_df)
+
+    if not update_lookup:
+        return df
+
     return df, lookup_df

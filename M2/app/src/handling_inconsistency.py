@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 """
 A module for handling inconsistency in data which includes the following functions:
@@ -16,11 +17,15 @@ def handle_emp_length(df: pd.DataFrame, lookup_df: pd.DataFrame) -> pd.DataFrame
     Returns:
          A tuple of 2 pandas DataFrames
     """
+
+#    convert nan to -1
+    df["emp_length"] = df["emp_length"].fillna("-1")
     df["emp_length"] = df["emp_length"].str.replace("years", "").str.strip()
     df["emp_length"] = df["emp_length"].str.replace("year", "").str.strip()
     df["emp_length"] = df["emp_length"].str.replace("< 1", "0.5").str.strip()
     df["emp_length"] = df["emp_length"].str.replace("10+", "11").str.strip()
     df["emp_length"] = df["emp_length"].astype("float")
+    df["emp_length"] = df["emp_length"].replace(-1, np.nan)
     new_row1 = pd.DataFrame(
         [
             {
@@ -85,18 +90,21 @@ def handle_term(df: pd.DataFrame, lookup_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def handle_type(df: pd.DataFrame) -> pd.DataFrame:
-    """A function to handle the loan_status column 
+    """A function to handle the loan_status column
     Args:
         df: A pandas DataFrame
     Returns:
         A pandas DataFrame
     """
-    df['type'] = df['type'].str.lower()
-    df['type'] = df['type'].str.replace(' ', '_')
-    df['type'] = df['type'].str.replace('joint_app', 'joint')
+    df["type"] = df["type"].str.lower()
+    df["type"] = df["type"].str.replace(" ", "_")
+    df["type"] = df["type"].str.replace("joint_app", "joint")
     return df
 
-def handle_inconsistencies(df: pd.DataFrame, lookup_df: pd.DataFrame) -> pd.DataFrame:
+
+def handle_inconsistencies(
+    df: pd.DataFrame, lookup_df: pd.DataFrame, update_lookup: bool = False
+) -> pd.DataFrame:
     """A function to handle inconsistencies in the DataFrame
     Args:
         df: A pandas DataFrame
@@ -107,4 +115,8 @@ def handle_inconsistencies(df: pd.DataFrame, lookup_df: pd.DataFrame) -> pd.Data
     df, lookup_df = handle_emp_length(df, lookup_df)
     df, lookup_df = handle_term(df, lookup_df)
     df = handle_type(df)
+
+    if not update_lookup:
+        return df
+
     return df, lookup_df

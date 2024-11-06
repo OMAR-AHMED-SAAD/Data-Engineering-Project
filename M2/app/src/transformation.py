@@ -2,6 +2,8 @@ import pandas as pd
 from typing import List, Tuple
 from sklearn.preprocessing import MinMaxScaler
 import json
+import pickle as pkl
+import os
 
 """
 A file for transformation functions which includes three parts:
@@ -22,6 +24,7 @@ A file for transformation functions which includes three parts:
 
 
 # ---------------- Part 1 ----------------
+
 
 def add_features(df: pd.DataFrame, states_dict_path: str) -> pd.DataFrame:
     """A function to add features to the DataFrame
@@ -51,7 +54,9 @@ def add_features(df: pd.DataFrame, states_dict_path: str) -> pd.DataFrame:
     df["state_name"] = df["state"].map(states_dict)
     return df
 
+
 # ---------------- Part 2 ----------------
+
 
 def add_one_hot_encoding(
     df: pd.DataFrame, column: str
@@ -63,10 +68,25 @@ def add_one_hot_encoding(
     Returns:
         A pandas DataFrame, List[str]
     """
-    df[column] = df[column].str.lower().str.replace(" ", "_")
-    old_values = df[column].unique()
+    encoding_file = f"data/encodings/{column}_enc.json"
+    df[column] = df[column].astype(str).str.lower().str.replace(" ", "_")
+    try:
+        with open(encoding_file, "r") as f:
+            old_values = json.load(f)[column]
+    except FileNotFoundError:
+        old_values = df[column].unique()
+        with open(encoding_file, "w") as f:
+            json.dump({column: old_values.tolist()}, f)
+
     dummies = pd.get_dummies(df[column], prefix=column)
     dummies = dummies.astype(int)
+
+    for value in old_values:
+        if column + "_" + value not in dummies.columns:
+            dummies[column + "_" + value] = 0
+    old_values = [column + "_" + value for value in old_values]
+    dummies = dummies[old_values]
+
     df = pd.concat([df, dummies], axis=1)
     return df, old_values
 
@@ -81,14 +101,29 @@ def add_label_encoding(
     Returns:
         A pandas DataFrame, List[str], List[int]
     """
-    unique_sorted = sorted(df[column].unique())
-    old_values = unique_sorted
+    encoding_file = f"data/encodings/{column}_enc.json"
 
-    df[column + "_enc"] = pd.Categorical(
-        df[column], categories=unique_sorted, ordered=True
-    ).codes
-    new_values = sorted(df[column + "_enc"].unique())
-    return df, old_values, new_values
+    if os.path.exists(encoding_file):
+        with open(encoding_file, "r") as f:
+            encoding_dict = json.load(f)
+        df[column + "_enc"] = df[column].astype(str).map(encoding_dict)
+        return df, [], []
+    else:
+        unique_sorted = sorted(df[column].unique())
+        old_values = unique_sorted
+
+        df[column + "_enc"] = pd.Categorical(
+            df[column], categories=unique_sorted, ordered=True
+        ).codes
+        new_values = sorted(df[column + "_enc"].unique())
+
+        with open(encoding_file, "w") as f:
+            encoding_dict = {
+                str(key): int(value) for key, value in zip(unique_sorted, new_values)
+            }
+            json.dump(encoding_dict, f)
+
+        return df, old_values, new_values
 
 
 def update_lookup_table_one_hot(
@@ -107,7 +142,7 @@ def update_lookup_table_one_hot(
                 {
                     "column": column,
                     "original": old,
-                    "imputed": f"{column}_{old}",
+                    "imputed": {old},
                     "impute_type": "one-hot-encoding",
                 }
             ]
@@ -160,8 +195,15 @@ def encode_and_update(
         A pandas DataFrame,
         A pandas DataFrame,
     """
+    encoding_file = f"data/encodings/{column}_enc.json"
+    if os.path.exists(encoding_file):
+        with open(encoding_file, "r") as f:
+            encoding_dict = json.load(f)
+        num_unique = len(encoding_dict)
+    else :
+        num_unique = df[column].nunique()
     if (
-        df[column].nunique() < encoding_type_threshold
+         num_unique< encoding_type_threshold
         and encode_type != "label-encoding"
     ):
         df, old_values = add_one_hot_encoding(df, column)
@@ -203,11 +245,14 @@ def encode_columns(
     return df, lookup_df
 
 
-def transform_grade(df: pd.DataFrame, lookup_df: pd.DataFrame) -> pd.DataFrame:
+def transform_grade(
+    df: pd.DataFrame, lookup_df: pd.DataFrame, update_lookup: bool = False
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """A function to handle the grade column
     Args:
         df: A pandas DataFrame
         lookup_df: A pandas DataFrame
+        update_lookup: A boolean to update the lookup table
     Returns:
         A tuple of 2 pandas DataFrames
     """
@@ -243,10 +288,14 @@ def transform_grade(df: pd.DataFrame, lookup_df: pd.DataFrame) -> pd.DataFrame:
         )
         lookup_df = pd.concat([lookup_df, new_row], ignore_index=True)
 
+    if not update_lookup:
+        return df
+
     return df, lookup_df
 
 
 # ---------------- Part 3 ----------------
+
 
 def min_max_scale_column(
     df: pd.DataFrame, old_column: str, new_column: str
@@ -258,8 +307,16 @@ def min_max_scale_column(
     Returns:
         A pandas DataFrame
     """
-    scaler = MinMaxScaler()
-    df[new_column] = scaler.fit_transform(df[[old_column]])
+
+    if os.path.exists(f"data/scalers/{old_column}_scaler.pkl"):
+        with open(f"data/scalers/{old_column}_scaler.pkl", "rb") as f:
+            scaler = pkl.load(f)
+        df[new_column] = scaler.transform(df[[old_column]])
+    else:
+        scaler = MinMaxScaler()
+        df[new_column] = scaler.fit_transform(df[[old_column]])
+        with open(f"data/scalers/{old_column}_scaler.pkl", "wb") as f:
+            pkl.dump(scaler, f)
     return df
 
 
@@ -278,17 +335,29 @@ def normlize_columns(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
+
 # ---------------- transform function ----------------
 
-def transform(df: pd.DataFrame, lookup_df: pd.DataFrame, states_dict_path: str) -> pd.DataFrame:
+
+def transform(
+    df: pd.DataFrame,
+    lookup_df: pd.DataFrame,
+    states_dict_path: str,
+    update_lookup: bool = False,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """A function to transform the data
     Args:
         df: A pandas DataFrame
         lookup_df: A pandas DataFrame
+        states_dict_path: A string representing the path to the states dictionary
+        update_lookup: A boolean to update the lookup table
     Returns:
         A tuple of 2 pandas DataFrames
     """
     df = add_features(df, states_dict_path)
     df, lookup_df = encode_columns(df, lookup_df)
     df = normlize_columns(df)
+
+    if not update_lookup:
+        return df
     return df, lookup_df
