@@ -11,4 +11,4 @@ COPY requirements.txt /app/requirements.txt
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-ENTRYPOINT ["python", "app.py"]
+ENTRYPOINT ["python", "main.py"]

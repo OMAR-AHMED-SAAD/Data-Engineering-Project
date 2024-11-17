@@ -2,7 +2,7 @@ import time
 import json
 import pandas as pd
 from kafka import KafkaConsumer
-from src.main import streamed_main
+from src.clean import streamed_main
 
 
 

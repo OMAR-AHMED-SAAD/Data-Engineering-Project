@@ -9,7 +9,7 @@ from src.db import save_to_db, add_rows_to_db
 
 
 """
-The main module for the transformation pipeline which includes the following functions:
+The clean module for the transformation pipeline which includes the following functions:
 - drop_extra_columns
 - load_data
 - save_data
